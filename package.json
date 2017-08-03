@@ -1,0 +1,22 @@
+{
+  "name": "html5-game-workshop",
+  "version": "1.0.0",
+  "description": "html5 game workshop guided by mozilla",
+  "main": "js/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "lite-server"
+  },
+  "keywords": [
+    "html5",
+    "phaser",
+    "workshop",
+    "videogame"
+  ],
+  "author": "Jorge I. Ramírez <ing.jorgeivanramirezh@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "lite-server": "^2.3.0",
+    "localtunnel": "^1.8.3"
+  }
+}
