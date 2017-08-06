@@ -12,35 +12,44 @@ PlayState.preload = function() {
     this.game.load.image('invisible-wall', 'images/invisible_wall.png');
     this.game.load.image('icon:coin', 'images/coin_icon.png');
     this.game.load.image('font:numbers', 'images/numbers.png');
+    this.game.load.image('key', 'images/key.png');
     
     // level settings
+    this.game.load.json('level:0', 'data/level00.json');
     this.game.load.json('level:1', 'data/level01.json');
 
     //sounds
     this.game.load.audio('sfx:jump', 'audio/jump.wav');
     this.game.load.audio('sfx:coin', 'audio/coin.wav');
     this.game.load.audio('sfx:stomp', 'audio/stomp.wav');
+    this.game.load.audio('sfx:key', 'audio/key.wav');
+    this.game.load.audio('sfx:door', 'audio/door.wav');
 
     // spritesheet
     this.game.load.spritesheet('coin', 'images/coin_animated.png', 22, 22); // 22,22 are the size in pixels of the individual frame
     this.game.load.spritesheet('spider', 'images/spider.png', 42, 32);
     this.game.load.spritesheet('hero', 'images/hero.png', 36, 42);
+    this.game.load.spritesheet('door', 'images/door.png', 42, 66);
+    this.game.load.spritesheet('icon:key', 'images/key_icon.png', 34, 30);
 };
 
 // create game entities and set up the world
 PlayState.create = function() {
     this.game.add.image(0, 0, 'background');
-    this._loadLevel(this.game.cache.getJSON('level:1'));
+    this._loadLevel(this.game.cache.getJSON(`level:${this.level}`));
     this.sfx = {
         jump: this.game.add.audio('sfx:jump'),
         coin: this.game.add.audio('sfx:coin'),
-        stomp: this.game.add.audio('sfx:stomp')
+        stomp: this.game.add.audio('sfx:stomp'),
+        key: this.game.add.audio('sfx:key'),
+        door: this.game.add.audio('sfx:door')
     };
     this._createHud();
 };
 
 PlayState._loadLevel = function (data){
     // groups layers
+    this.bgDecoration = this.game.add.group(); // this group should be before any other so it can appear in the backbround
     this.platforms = this.game.add.group();
     this.coins = this.game.add.group();
     this.spiders = this.game.add.group();
@@ -56,6 +65,8 @@ PlayState._loadLevel = function (data){
     const GRAVITY = 1200;
     this.game.physics.arcade.gravity.y = GRAVITY;
 
+    this._spawnDoor(data.door.x, data.door.y);
+    this._spawnKey(data.key.x, data.key.y);
 };
 
 // spawn the platforms
@@ -107,8 +118,30 @@ PlayState._spawnEnemyWall = function (x, y, side) {
     sprite.body.allowGravity = false;
 };
 
+PlayState._spawnDoor = function(x, y){
+    this.door = this.bgDecoration.create(x, y, 'door');
+    this.door.anchor.setTo(0.5, 1);
+    this.game.physics.enable(this.door);
+    this.door.body.allowGravity = false;
+};
+
+PlayState._spawnKey = function (x, y) {
+    this.key = this.bgDecoration.create(x, y, 'key');
+    this.key.anchor.set(0.5, 0.5);
+    this.game.physics.enable(this.key);
+    this.key.body.allowGravity = false;
+
+    // add a small animation via tween
+    this.key.y -= 3;
+    this.game.add.tween(this.key)
+        .to({y: this.key.y + 6}, 800, Phaser.Easing.Sinusoidal.InOut)
+        .yoyo(true)
+        .loop()
+        .start();
+};
+
 // set controls
-PlayState.init = function(){
+PlayState.init = function(data){
     this.keys = this.game.input.keyboard.addKeys({
         left: Phaser.KeyCode.LEFT,
         right: Phaser.KeyCode.RIGHT,
@@ -118,6 +151,13 @@ PlayState.init = function(){
     this.game.renderer.renderSession.roundPixels = true;
     
     this.coinPickupCount = 0;
+
+    // flag to know if the character has the key
+    this.hasKey = false;
+
+    // level management
+    const LEVEL_COUNT = 2;
+    this.level = (data.level || 0) % LEVEL_COUNT;
 };
 
 // Hero class
@@ -238,6 +278,8 @@ PlayState.update = function(){
     this._handleCollisions();
     this._handleInput();
     this.coinFont.text = `x${this.coinPickupCount}`;
+    // update key sprite
+    this.keyIcon.frame = this.hasKey ? 1 : 0;
 };
 
 PlayState._handleInput = function(){
@@ -269,6 +311,14 @@ PlayState._handleCollisions = function(){
     this.game.physics.arcade.collide(this.spiders, this.enemyWalls);
     // spider kills hero
     this.game.physics.arcade.overlap(this.hero, this.spiders, this._onHeroVsEnemy, null, this);
+    // hero gets the key
+    this.game.physics.arcade.overlap(this.hero, this.key, this._onHeroVsKey, null, this);
+    // hero opens the door
+    this.game.physics.arcade.overlap(this.hero, this.door, this._onHeroVsDoor, this._heroDoorFilter, this);
+};
+
+PlayState._heroDoorFilter = function (hero, door) {
+    return this.hasKey && hero.body.touching.down;      
 };
 
 PlayState._onHeroVsCoin = function (hero, coin) {
@@ -285,15 +335,29 @@ PlayState._onHeroVsEnemy = function(hero, spider){
 
     }else{
         this.sfx.stomp.play();
-        this.game.state.restart();
+        this.game.state.restart(true, false, {level: this.level});
     }
+};
+
+PlayState._onHeroVsKey = function (hero, key) {
+    this.sfx.key.play();
+    key.kill();
+    this.hasKey = true;
+};
+
+PlayState._onHeroVsDoor = function (hero, door) {
+    this.sfx.door.play();
+    this.game.state.restart(true, false, {level: this.level + 1});
 };
 
 PlayState._createHud = function(){
     const NUMBERS_STR = '0123456789X ';
     this.coinFont = this.game.add.retroFont('font:numbers', 20, 26, NUMBERS_STR, 6);
+    // key image
+    this.keyIcon = this.game.make.image(0, 19, 'icon:key');
+    this.keyIcon.anchor.set(0, 0.5);
 
-    let coinIcon = this.game.make.image(0, 0, 'icon:coin');
+    let coinIcon = this.game.make.image(this.keyIcon.width + 7, 0, 'icon:coin');
     this.hud = this.game.add.group();
     this.hud.add(coinIcon);
     this.hud.position.set(10, 10);
@@ -301,11 +365,13 @@ PlayState._createHud = function(){
     let coinScoreImage = this.game.make.image(coinIcon.x + coinIcon.width, coinIcon.height / 2, this.coinFont);
     coinScoreImage.anchor.set(0, 0.5);
     this.hud.add(coinScoreImage);
+
+    this.hud.add(this.keyIcon);
 };
 
 window.onload = () => {
     const game = new Phaser.Game(960, 600, Phaser.AUTO, 'game');
 
     game.state.add('play', PlayState);
-    game.state.start('play');
+    game.state.start('play', true, false, {level: 0}); // the first boolean is for keep the cache and the second os for discard the existing world objects
 };
