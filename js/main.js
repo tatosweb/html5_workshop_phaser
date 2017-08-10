@@ -29,6 +29,10 @@ Hero.prototype.jump = function () {
     return canJump;
 };  
 
+Hero.prototype.bounce = function () {
+    const BOUNCE_SPEED = 200;
+    this.body.velocity.y = -BOUNCE_SPEED;
+};
 
 PlayState = {};
 
@@ -77,6 +81,7 @@ PlayState.preload = function () {
     //sound
     this.game.load.audio('sfx:jump', 'audio/jump.wav');
     this.game.load.audio('sfx:coin', 'audio/coin.wav');
+    this.game.load.audio('sfx:stomp', 'audio/stomp.wav');
 
     //add coins
     this.game.load.spritesheet('coin', 'images/coin_animated.png', 22, 22);
@@ -95,8 +100,12 @@ PlayState.create = function () {
     // create sound entities
     this.sfx = {
         jump: this.game.add.audio('sfx:jump'),
-        coin: this.game.add.audio('sfx:coin')
+        coin: this.game.add.audio('sfx:coin'),
+        //kill sound
+        stomp: this.game.add.audio('sfx:stomp')
     };
+
+    
 };
 
 PlayState._loadLevel = function (data) {
@@ -187,6 +196,22 @@ PlayState._handleCollisions = function () {
     //collisions for spiders and walls
     this.game.physics.arcade.collide(this.spiders, this.platforms);
     this.game.physics.arcade.collide(this.spiders, this.enemyWalls);
+    //kill the main character
+    this.game.physics.arcade.overlap(this.hero, this.spiders,
+        this._onHeroVsEnemy, null, this);
+};
+
+PlayState._onHeroVsEnemy = function (hero, enemy) {
+    if (hero.body.velocity.y > 0) { // kill enemies when hero is falling
+        hero.bounce();
+        enemy.kill();
+        this.sfx.stomp.play();
+        enemy.die();
+    }
+    else { // game over -> restart the game
+        this.sfx.stomp.play();
+        this.game.state.restart();
+    }
 };
 
 PlayState._onHeroVsCoin = function (hero, coin) {
@@ -238,4 +263,11 @@ Spider.prototype.update = function () {
     else if (this.body.touching.left || this.body.blocked.left) {
         this.body.velocity.x = Spider.SPEED; // turn right
     }
+};
+
+Spider.prototype.die = function () {
+    this.body.enable = false;
+    this.animations.play('die').onComplete.addOnce(function () {
+        this.kill();
+    }, this);
 };
