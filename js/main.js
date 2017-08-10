@@ -76,6 +76,10 @@ PlayState.preload = function () {
 
     //sound
     this.game.load.audio('sfx:jump', 'audio/jump.wav');
+    this.game.load.audio('sfx:coin', 'audio/coin.wav');
+
+    //add coins
+    this.game.load.spritesheet('coin', 'images/coin_animated.png', 22, 22);
 
 };
 
@@ -86,13 +90,16 @@ PlayState.create = function () {
     this._loadLevel(this.game.cache.getJSON('level:1'));
     // create sound entities
     this.sfx = {
-        jump: this.game.add.audio('sfx:jump')
+        jump: this.game.add.audio('sfx:jump'),
+        coin: this.game.add.audio('sfx:coin')
     };
 };
 
 PlayState._loadLevel = function (data) {
     // create all the groups/layers that we need
     this.platforms = this.game.add.group();
+    //add coins to level
+    this.coins = this.game.add.group();
 	console.log(data);
 	data.platforms.forEach(this._spawnPlatform, this);
     // spawn hero and enemies
@@ -100,6 +107,19 @@ PlayState._loadLevel = function (data) {
     // enable gravity
     const GRAVITY = 1200;
     this.game.physics.arcade.gravity.y = GRAVITY;
+    //spawn coins throught level
+    data.coins.forEach(this._spawnCoin, this);
+};
+
+PlayState._spawnCoin = function (coin) {
+    let sprite = this.coins.create(coin.x, coin.y, 'coin');
+    sprite.anchor.set(0.5, 0.5);
+    //animation
+    sprite.animations.add('rotate', [0, 1, 2, 1], 6, true); // 6fps, looped
+    sprite.animations.play('rotate');
+    //physic body to the coin
+    this.game.physics.enable(sprite);
+    sprite.body.allowGravity = false;
 };
 
 PlayState._spawnPlatform = function (platform) {
@@ -127,6 +147,17 @@ PlayState.update = function () {
 
 PlayState._handleCollisions = function () {
     this.game.physics.arcade.collide(this.hero, this.platforms);
+    // conin collisions:
+    // want to check all coins, we can just pass null to indicate "no filter, please"
+    this.game.physics.arcade.overlap(this.hero, this.coins, this._onHeroVsCoin,
+        null, this);
+};
+
+PlayState._onHeroVsCoin = function (hero, coin) {
+    //play coin sound
+    this.sfx.coin.play();
+    //remove the coin
+    coin.kill();
 };
 
 PlayState._handleInput = function () {
